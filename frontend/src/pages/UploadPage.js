@@ -71,6 +71,13 @@ function UploadPage() {
     }
   };
 
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setMessageType('info');
+    setMessage('✅ Link copied to clipboard!');
+    setTimeout(() => setMessage(''), 3000);
+  };
+
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -192,7 +199,52 @@ function UploadPage() {
               {uploadedFile.temporary && (
                 <p><strong>Expires In:</strong> {uploadedFile.expirationMinutes} minutes</p>
               )}
-              <p><strong>Download Link:</strong> <a href={uploadedFile.url} target="_blank" rel="noopener noreferrer">{uploadedFile.url}</a></p>
+              
+              <hr className="divider" />
+              
+              <div className="share-section">
+                <h4>📤 Share Your File</h4>
+                
+                <div className="share-link-box">
+                  <p><strong>Preview Link (6-Char Code):</strong></p>
+                  <div className="link-container">
+                    <input 
+                      type="text" 
+                      value={uploadedFile.previewUrl} 
+                      readOnly 
+                      className="link-input"
+                    />
+                    <button 
+                      onClick={() => copyToClipboard(uploadedFile.previewUrl)}
+                      className="copy-btn"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="link-hint">Share this link to let others preview your file</p>
+                </div>
+
+                <div className="share-link-box">
+                  <p><strong>Download Link:</strong></p>
+                  <div className="link-container">
+                    <input 
+                      type="text" 
+                      value={uploadedFile.url} 
+                      readOnly 
+                      className="link-input"
+                    />
+                    <button 
+                      onClick={() => copyToClipboard(uploadedFile.url)}
+                      className="copy-btn"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <a href={uploadedFile.url} target="_blank" rel="noopener noreferrer" className="direct-link">
+                    Direct Download
+                  </a>
+                </div>
+              </div>
             </div>
             <button 
               onClick={() => setUploadedFile(null)}
