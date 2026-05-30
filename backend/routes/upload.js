@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const { validateFile } = require('../middleware/validation');
+const { generateShareCode, addMapping, getMapping, deleteMapping } = require('../middleware/fileMapping');
 
 const router = express.Router();
 
@@ -47,6 +48,23 @@ router.post('/file', upload.single('file'), (req, res) => {
       });
     }
 
+    // Generate unique share code
+    const shareCode = generateShareCode();
+
+    // Determine file type for preview
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let fileType = 'unknown';
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) fileType = 'image';
+    else if (['.pdf'].includes(ext)) fileType = 'pdf';
+    else if (['.txt', '.md', '.json', '.xml', '.html', '.css', '.js'].includes(ext)) fileType = 'text';
+    else if (['.mp4', '.avi', '.mov', '.mkv', '.webm'].includes(ext)) fileType = 'video';
+    else if (['.mp3', '.wav', '.flac', '.aac', '.ogg'].includes(ext)) fileType = 'audio';
+    else if (['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].includes(ext)) fileType = 'document';
+    else fileType = 'file';
+
+    // Store mapping
+    addMapping(shareCode, req.file.filename, req.file.originalname, fileType, isTemporary);
+
     // Rename file if temporary to include expiration
     if (isTemporary) {
       const expirationMs = expirationMinutes * 60 * 1000;
@@ -71,7 +89,10 @@ router.post('/file', upload.single('file'), (req, res) => {
         uploadTime: new Date(),
         temporary: isTemporary,
         expirationMinutes: isTemporary ? expirationMinutes : null,
-        url: `/api/upload/download/${req.file.filename}`
+        url: `/api/upload/download/${req.file.filename}`,
+        shareCode: shareCode,
+        previewUrl: `/api/upload/preview/${shareCode}`,
+        fileType: fileType
       },
       nsfw_warning
     });
@@ -82,6 +103,41 @@ router.post('/file', upload.single('file'), (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch {}
     }
     res.status(500).json({ error: 'File upload failed', details: err.message });
+  }
+});
+
+// Preview file
+router.get('/preview/:shareCode', (req, res) => {
+  try {
+    const shareCode = req.params.shareCode;
+    const mapping = getMapping(shareCode);
+
+    if (!mapping) {
+      return res.status(404).json({ error: 'Preview not found' });
+    }
+
+    let filePath = path.join(__dirname, '../uploads', mapping.filename);
+    if (!fs.existsSync(filePath)) {
+      filePath = path.join(__dirname, '../temp', mapping.filename);
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    // Send preview response based on file type
+    res.json({
+      success: true,
+      filename: mapping.originalName,
+      fileType: mapping.fileType,
+      shareCode: shareCode,
+      uploadTime: mapping.createdAt,
+      downloadUrl: `/api/upload/download/${mapping.filename}`
+    });
+
+  } catch (err) {
+    console.error('Preview error:', err);
+    res.status(500).json({ error: 'Preview failed', details: err.message });
   }
 });
 
