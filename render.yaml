@@ -20,3 +20,5 @@ services:
     envVars:
       - key: REACT_APP_API_URL
         value: https://uploadit-backend.onrender.com
+      - key: DANGEROUSLY_DISABLE_HOST_CHECK
+        value: "true"
