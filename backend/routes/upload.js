@@ -76,7 +76,7 @@ router.post('/file', upload.single('file'), (req, res) => {
     }
 
     // NSFW warning message (server-side enforcement)
-    const nsfw_warning = `⚠️ WARNING: NSFW (Not Safe For Work) files are STRICTLY NOT ALLOWED on Upload.IT. 
+    const nsfw_warning = ` WARNING: NSFW (Not Safe For Work) files are STRICTLY NOT ALLOWED on Upload.IT. 
     Uploading such content may result in account suspension.`;
 
     res.json({
