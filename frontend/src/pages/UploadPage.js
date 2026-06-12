@@ -60,7 +60,16 @@ function UploadPage() {
 
       setMessageType('success');
       setMessage(`✅ ${response.data.message}`);
-      setUploadedFile(response.data.file);
+      
+      // Add full API URL to share links
+      const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const file = {
+        ...response.data.file,
+        previewUrl: `${apiUrl}/api/upload/preview/${response.data.file.shareCode}`,
+        url: `${apiUrl}/api/upload/download/${response.data.file.id}`
+      };
+      
+      setUploadedFile(file);
       setFile(null);
       document.getElementById('fileInput').value = '';
     } catch (err) {
@@ -251,12 +260,3 @@ function UploadPage() {
               className="close-btn"
             >
               Upload Another File
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default UploadPage;
