@@ -10,6 +10,12 @@ services:
         value: production
       - key: PORT
         value: "10000"
+      - key: UPLOAD_DIR
+        value: /tmp/uploads
+      - key: TEMP_DIR
+        value: /tmp/temp
+    healthCheckPath: /api/health
+    healthCheckInterval: 60
 
   - type: web
     name: uploadit-frontend
