@@ -1,44 +1,47 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import UploadPage from './pages/UploadPage';
 import FileListPage from './pages/FileListPage';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('upload');
-
   return (
-    <div className="App">
-      <header className="navbar">
-        <div className="navbar-container">
-          <h1 className="logo">Upload.IT</h1>
-          <p className="tagline">Secure File Sharing Made Simple</p>
-          <nav className="nav-buttons">
-            <button 
-              className={`nav-btn ${currentPage === 'upload' ? 'active' : ''}`}
-              onClick={() => setCurrentPage('upload')}
-            >
-              Upload Files
-            </button>
-            <button 
-              className={`nav-btn ${currentPage === 'files' ? 'active' : ''}`}
-              onClick={() => setCurrentPage('files')}
-            >
-              My Files
-            </button>
-          </nav>
-        </div>
-      </header>
+    <Router>
+      <div className="App">
+        <header className="navbar">
+          <div className="navbar-container">
+            <h1 className="logo">Upload.IT</h1>
+            <p className="tagline">Secure File Sharing Made Simple</p>
+            <nav className="nav-buttons">
+              <Link 
+                to="/"
+                className="nav-btn"
+              >
+                Upload Files
+              </Link>
+              <Link 
+                to="/files"
+                className="nav-btn"
+              >
+                My Files
+              </Link>
+            </nav>
+          </div>
+        </header>
 
-      <main className="container">
-        {currentPage === 'upload' && <UploadPage />}
-        {currentPage === 'files' && <FileListPage />}
-      </main>
+        <main className="container">
+          <Routes>
+            <Route path="/" element={<UploadPage />} />
+            <Route path="/files" element={<FileListPage />} />
+          </Routes>
+        </main>
 
-      <footer className="footer">
-        <p>&copy; 2026 Upload.IT - All rights reserved</p>
-        <p className="warning">⚠️ NSFW files are strictly not allowed</p>
-      </footer>
-    </div>
+        <footer className="footer">
+          <p>&copy; 2026 Upload.IT - All rights reserved</p>
+          <p className="warning"> NSFW files are strictly not allowed</p>
+        </footer>
+      </div>
+    </Router>
   );
 }
 
