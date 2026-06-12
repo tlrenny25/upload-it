@@ -12,8 +12,8 @@ const router = express.Router();
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const dir = req.body.temporary === 'true' 
-      ? path.join(__dirname, '../temp')
-      : path.join(__dirname, '../uploads');
+      ? req.tempDir
+      : req.uploadsDir;
     cb(null, dir);
   },
   filename: (req, file, cb) => {
@@ -117,9 +117,9 @@ router.get('/preview/:shareCode', (req, res) => {
       return res.status(404).json({ error: 'Preview not found' });
     }
 
-    let filePath = path.join(__dirname, '../uploads', mapping.filename);
+    let filePath = path.join(req.uploadsDir, mapping.filename);
     if (!fs.existsSync(filePath)) {
-      filePath = path.join(__dirname, '../temp', mapping.filename);
+      filePath = path.join(req.tempDir, mapping.filename);
     }
 
     if (!fs.existsSync(filePath)) {
@@ -147,8 +147,8 @@ router.get('/list/:type', (req, res) => {
   try {
     const type = req.params.type;
     const dir = type === 'temp' 
-      ? path.join(__dirname, '../temp')
-      : path.join(__dirname, '../uploads');
+      ? req.tempDir
+      : req.uploadsDir;
 
     if (!fs.existsSync(dir)) {
       return res.json({ files: [] });
@@ -190,10 +190,10 @@ router.get('/list/:type', (req, res) => {
 router.get('/download/:filename', (req, res) => {
   try {
     const filename = req.params.filename;
-    let filePath = path.join(__dirname, '../uploads', filename);
+    let filePath = path.join(req.uploadsDir, filename);
 
     if (!fs.existsSync(filePath)) {
-      filePath = path.join(__dirname, '../temp', filename);
+      filePath = path.join(req.tempDir, filename);
     }
 
     if (!fs.existsSync(filePath)) {
@@ -212,10 +212,10 @@ router.get('/download/:filename', (req, res) => {
 router.delete('/delete/:filename', (req, res) => {
   try {
     const filename = req.params.filename;
-    let filePath = path.join(__dirname, '../uploads', filename);
+    let filePath = path.join(req.uploadsDir, filename);
 
     if (!fs.existsSync(filePath)) {
-      filePath = path.join(__dirname, '../temp', filename);
+      filePath = path.join(req.tempDir, filename);
     }
 
     if (!fs.existsSync(filePath)) {
