@@ -24,6 +24,33 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 } });
 
+// MIME types for preview
+const mimeTypes = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.md': 'text/plain',
+  '.json': 'application/json',
+  '.xml': 'text/xml',
+  '.html': 'text/html',
+  '.css': 'text/css',
+  '.mp4': 'video/mp4',
+  '.avi': 'video/x-msvideo',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+  '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.flac': 'audio/flac',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg'
+};
+
 // Upload file
 router.post('/file', upload.single('file'), (req, res) => {
   try {
@@ -51,19 +78,7 @@ router.post('/file', upload.single('file'), (req, res) => {
     // Generate unique share code
     const shareCode = generateShareCode();
 
-    // Determine file type for preview
-    const ext = path.extname(req.file.originalname).toLowerCase();
-    let fileType = 'unknown';
-    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'].includes(ext)) fileType = 'image';
-    else if (['.pdf'].includes(ext)) fileType = 'pdf';
-    else if (['.txt', '.md', '.json', '.xml', '.html', '.css', '.js'].includes(ext)) fileType = 'text';
-    else if (['.mp4', '.avi', '.mov', '.mkv', '.webm'].includes(ext)) fileType = 'video';
-    else if (['.mp3', '.wav', '.flac', '.aac', '.ogg'].includes(ext)) fileType = 'audio';
-    else if (['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].includes(ext)) fileType = 'document';
-    else fileType = 'file';
-
-    // Store mapping
-    addMapping(shareCode, req.file.filename, req.file.originalname, fileType, isTemporary);
+    let actualFilename = req.file.filename;
 
     // Rename file if temporary to include expiration
     if (isTemporary) {
@@ -71,13 +86,11 @@ router.post('/file', upload.single('file'), (req, res) => {
       const newFilename = `${expirationMs}_${req.file.filename}`;
       const newPath = path.join(path.dirname(req.file.path), newFilename);
       fs.renameSync(req.file.path, newPath);
-      req.file.filename = newFilename;
-      req.file.path = newPath;
+      actualFilename = newFilename;
     }
 
-    // NSFW warning message (server-side enforcement)
-    const nsfw_warning = `⚠️ WARNING: NSFW (Not Safe For Work) files are STRICTLY NOT ALLOWED on Upload.IT. 
-    Uploading such content may result in account suspension.`;
+    // Store mapping
+    addMapping(shareCode, actualFilename, req.file.originalname, 'file', isTemporary);
 
     res.json({
       success: true,
@@ -89,32 +102,28 @@ router.post('/file', upload.single('file'), (req, res) => {
         uploadTime: new Date(),
         temporary: isTemporary,
         expirationMinutes: isTemporary ? expirationMinutes : null,
-        url: `/api/upload/download/${req.file.filename}`,
-        shareCode: shareCode,
-        previewUrl: `/api/upload/preview/${shareCode}`,
-        fileType: fileType
-      },
-      nsfw_warning
+        downloadUrl: `/api/upload/download/${actualFilename}`,
+        previewUrl: `/api/upload/preview/${shareCode}`
+      }
     });
 
   } catch (err) {
     console.error('Upload error:', err);
-    console.error('Error details:', err.message, err.stack);
     if (req.file) {
       try { fs.unlinkSync(req.file.path); } catch {}
     }
-    res.status(500).json({ error: 'File upload failed', details: err.message });
+    res.status(500).json({ error: 'File upload failed' });
   }
 });
 
-// Preview file
+// PREVIEW - Serve actual file (NO JSON, just the file)
 router.get('/preview/:shareCode', (req, res) => {
   try {
     const shareCode = req.params.shareCode;
     const mapping = getMapping(shareCode);
 
     if (!mapping) {
-      return res.status(404).json({ error: 'Preview not found' });
+      return res.status(404).send('File not found');
     }
 
     let filePath = path.join(req.uploadsDir, mapping.filename);
@@ -123,22 +132,19 @@ router.get('/preview/:shareCode', (req, res) => {
     }
 
     if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
+      return res.status(404).send('File not found');
     }
 
-    // Send preview response based on file type
-    res.json({
-      success: true,
-      filename: mapping.originalName,
-      fileType: mapping.fileType,
-      shareCode: shareCode,
-      uploadTime: mapping.createdAt,
-      downloadUrl: `/api/upload/download/${mapping.filename}`
-    });
+    const ext = path.extname(mapping.filename).toLowerCase();
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${mapping.originalName}"`);
+    res.sendFile(filePath);
 
   } catch (err) {
     console.error('Preview error:', err);
-    res.status(500).json({ error: 'Preview failed', details: err.message });
+    res.status(500).send('Error');
   }
 });
 
@@ -146,9 +152,7 @@ router.get('/preview/:shareCode', (req, res) => {
 router.get('/list/:type', (req, res) => {
   try {
     const type = req.params.type;
-    const dir = type === 'temp' 
-      ? req.tempDir
-      : req.uploadsDir;
+    const dir = type === 'temp' ? req.tempDir : req.uploadsDir;
 
     if (!fs.existsSync(dir)) {
       return res.json({ files: [] });
@@ -157,7 +161,15 @@ router.get('/list/:type', (req, res) => {
     const files = fs.readdirSync(dir).map(filename => {
       const filePath = path.join(dir, filename);
       const stat = fs.statSync(filePath);
-      const originalName = filename.split('_').slice(2).join('_');
+      
+      let originalName = filename;
+      const parts = filename.split('_');
+      
+      if (type === 'temp' && parts.length >= 3) {
+        originalName = parts.slice(2).join('_');
+      } else if (parts.length >= 2) {
+        originalName = parts.slice(1).join('_');
+      }
       
       let expirationMinutes = null;
       let expiresAt = null;
@@ -175,14 +187,14 @@ router.get('/list/:type', (req, res) => {
         uploadTime: stat.birthtime,
         expirationMinutes,
         expiresAt,
-        url: `/api/upload/download/${filename}`
+        downloadUrl: `/api/upload/download/${filename}`
       };
     });
 
     res.json({ files });
   } catch (err) {
     console.error('List error:', err);
-    res.status(500).json({ error: 'Failed to list files', details: err.message });
+    res.status(500).json({ error: 'Failed to list files' });
   }
 });
 
@@ -200,33 +212,21 @@ router.get('/download/:filename', (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const originalName = filename.split('_').slice(2).join('_');
+    const parts = filename.split('_');
+    let originalName = filename;
+    
+    if (parts.length >= 3) {
+      originalName = parts.slice(2).join('_');
+    } else if (parts.length >= 2) {
+      originalName = parts.slice(1).join('_');
+    }
+    
     res.download(filePath, originalName);
   } catch (err) {
     console.error('Download error:', err);
-    res.status(500).json({ error: 'Download failed', details: err.message });
+    res.status(500).json({ error: 'Download failed' });
   }
 });
 
 // Delete file
 router.delete('/delete/:filename', (req, res) => {
-  try {
-    const filename = req.params.filename;
-    let filePath = path.join(req.uploadsDir, filename);
-
-    if (!fs.existsSync(filePath)) {
-      filePath = path.join(req.tempDir, filename);
-    }
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    fs.unlinkSync(filePath);
-    res.json({ success: true, message: 'File deleted successfully' });
-  } catch (err) {
-    console.error('Delete error:', err);
-    res.status(500).json({ error: 'Delete failed', details: err.message });
-  }
-});
-
